@@ -1,0 +1,143 @@
+---
+title: "Project2"
+author: N/A
+date: "3/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(gganimate)
+library(gifski)
+library(png)
+```
+
+```{r}
+attendance <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-02-04/attendance.csv')
+standings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-02-04/standings.csv')
+games <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-02-04/games.csv')
+
+```
+# Cleaning the Data 
+```{r - Cleaning the Data}
+games<- games %>% 
+  select(-c(tie, home_team, away_team))
+#separate winner into two columns 
+#make day variable numeric 
+#change date variable 
+
+```
+
+```{r}
+standings<- standings %>% 
+  mutate(playoffs = case_when(playoffs == "Playoffs" ~ 1, 
+                   playoffs == "No Playoffs" ~ 0)
+  ) %>% 
+  mutate(sb_winner = case_when(sb_winner == "No Superbowl" ~ 0, 
+                               sb_winner == "Won Superbowl" ~ 1)
+  )
+```
+# Part 1: Data Visualization
+
+# 1. Home and Away Attendance Trends of Top 5 Most Popular NFL Teams 
+```{r}
+attendancetrends <- attendance %>% 
+  filter(team_name %in% c("Packers", "Steelers", "Cowboys", "Patriots", "Broncos"))
+
+plot0 <- ggplot(data = attendancetrends) + geom_smooth(aes(x=year, y=total, color = team_name)) + xlab("Year") + ylab ("Total Attendance")
+
+plot0
+
+```
+
+# 2. Win to Loss Ratio for the Most Popular NFL Teams 
+```{r}
+wlratio <- standings %>%  
+  mutate(
+    WLRATIO = wins/loss
+  ) %>% 
+  select(team_name, year, WLRATIO) %>% 
+  filter(team_name %in% c("Packers", "Steelers", "Cowboys", "Patriots", "Broncos")) -> wlratio2
+  
+
+plot1 <- ggplot(data = wlratio) + geom_smooth(mapping = aes(x = year, y = WLRATIO, color = factor(team_name)), stat = "identity", lwd = 1) + labs(x = "Year", y = "Win Loss Ratio") + theme(legend.position = "top") + xlim(2000,2019) + ggtitle("Win Loss Ratio") + ylim(-10,20)
+
+plot1
+```
+
+# 3. Average Offensive and Defensive Rankings over the years 
+```{r}
+ODR <- standings %>%  
+  select(team_name, year, offensive_ranking, defensive_ranking) %>% 
+  filter(team_name %in% c("Packers", "Steelers", "Cowboys", "Patriots", "Broncos")) %>% 
+  pivot_longer(offensive_ranking:defensive_ranking, names_to = "o_d", values_to = "value") 
+
+plot2 <- ggplot(data = ODR) + geom_line(aes(x = year, y = value, color = team_name)) + facet_wrap(~o_d) + xlab("Team Name") + ylab("Aggregated Offensive and Defensive Ranking") + ggtitle("Offensive and Defensive Rankings of the Top 5 NFL teams over the years")
+
+plot2 + transition_reveal(year)
+```
+
+# 4. Runner Up Turnovers win During Superbowl 
+```{r}
+games_standings_merge <- full_join(games, standings, by = "year")
+
+gsm2 <- games_standings_merge %>%  
+  filter(sb_winner == 0) %>%
+  filter(playoffs == 1) %>% 
+  separate(date, into = c("Month", "Day"), sep = " ") %>%
+  group_by(Month) %>% 
+  summarize(t_win = sum(turnovers_win)) %>% 
+  arrange(desc(t_win))
+
+gsm2
+```
+
+# Part 2: Unit 2 - Functional Programming 
+```{r}
+yards_to_meters <- function(nums){
+  yards <- nums * 0.9144
+  return(yards)
+}
+
+games <- games %>% 
+  mutate(
+    yds_win = map(yds_win, ~yards_to_meters(.x)),
+    yds_loss = map(yds_loss, ~yards_to_meters(.x)))
+```
+
+# Part 3: Unit 3 - Statistical Analysis 
+```{r}
+standings %>% 
+  select(strength_of_schedule, playoffs) %>% 
+  ggplot(aes(x=strength_of_schedule, y=playoffs)) + 
+  geom_smooth()
+lm(playoffs ~ strength_of_schedule, data=standings)
+```
+
+```{r}
+join<- full_join(standings, attendance)
+
+join1<- join %>% 
+  group_by(team_name, wins, home, strength_of_schedule, offensive_ranking, defensive_ranking, playoffs) %>% 
+  summarize(total_win =sum(wins)) %>% 
+  select(team_name, wins, home, strength_of_schedule, offensive_ranking, defensive_ranking, playoffs) 
+lm(wins~home + strength_of_schedule + offensive_ranking + defensive_ranking + playoffs, data=join1)
+
+
+```
+
+```{r}
+join2<- join %>% 
+  group_by(team_name, playoffs, offensive_ranking, defensive_ranking, strength_of_schedule) 
+lm(playoffs~ offensive_ranking + defensive_ranking + strength_of_schedule + offensive_ranking*strength_of_schedule + defensive_ranking*strength_of_schedule , data = join2)
+```
+
+
+
+
